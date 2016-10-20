@@ -1,0 +1,48 @@
+FROM centos:6.7
+
+#docker build -t='akin520/kafka_multi:0.8.2.2' -f kafka/Dockerfile-M .
+#run
+#docker run -itd --name kafka0 -h kafka0 -p 9092:9092 -e BROKER_ID=0 -e BROKER_PORT=9092 --link zookeeper akin520/kafka_multi:0.8.2.2
+#docker run -itd --name kafka1 -h kafka1 -p 9093:9093 -e BROKER_ID=1 -e BROKER_PORT=9093 --link zookeeper akin520/kafka_multi:0.8.2.2
+#docker run -itd --name kafka2 -h kafka2 -p 9094:9094 -e BROKER_ID=2 -e BROKER_PORT=9094 --link zookeeper akin520/kafka_multi:0.8.2.2
+
+ENV KAFKA_VERSION "0.8.2.2"
+
+RUN yum -y install vim lsof wget tar bzip2 unzip vim-enhanced passwd sudo yum-utils hostname net-tools rsync man git make automake cmake patch logrotate python-devel libpng-devel libjpeg-devel pwgen python-pip
+
+RUN mkdir /opt/java &&\
+	wget --no-check-certificate --no-cookies --header "Cookie: oraclelicense=accept-securebackup-cookie" http://download.oracle.com/otn-pub/java/jdk/8u102-b14/jdk-8u102-linux-x64.tar.gz -P /opt/java
+
+RUN mkdir /opt/kafka &&\
+	wget http://apache.fayea.com/kafka/$KAFKA_VERSION/kafka_2.11-$KAFKA_VERSION.tgz -P /opt/kafka
+
+RUN tar zxvf /opt/java/jdk-8u102-linux-x64.tar.gz -C /opt/java &&\
+    rm -rf /opt/java/jdk-8u102-linux-x64.tar.gz &&\
+	echo 'export JAVA_HOME=/opt/java/jdk1.8.0_102' >>/etc/profile &&\
+	echo 'export PATH=$PATH:$JAVA_HOME/bin' >> /etc/profile &&\
+	echo 'export CLASSPATH=.:$CLASSPATH:$JAVA_HOME/lib:$JAVA_HOME/jre/lib' >>/etc/profile &&\
+	source /etc/profile
+
+RUN tar zxvf /opt/kafka/kafka*.tgz -C /opt/kafka &&\
+	sed -i 's/num.partitions.*$/num.partitions=3/g' /opt/kafka/kafka_2.11-$KAFKA_VERSION/config/server.properties
+	
+
+RUN echo "source /etc/profile" > /opt/kafka/start.sh &&\
+	echo "cd /opt/kafka/kafka_2.11-"$KAFKA_VERSION >> /opt/kafka/start.sh &&\
+	echo "sed -i 's%zookeeper.connect=.*$%zookeeper.connect=zookeeper:2181%g'  /opt/kafka/kafka_2.11-"$KAFKA_VERSION"/config/server.properties" >> /opt/kafka/start.sh &&\
+	echo "[ ! -z $""BROKER_ID"" ] && sed -i 's%broker.id=.*$%broker.id='$""BROKER_ID'""%g'  /opt/kafka/kafka_2.11-"$KAFKA_VERSION"/config/server.properties" >> /opt/kafka/start.sh &&\
+	echo "[ ! -z $""BROKER_PORT"" ] && sed -i 's%port=.*$%port='$""BROKER_PORT'""%g'  /opt/kafka/kafka_2.11-"$KAFKA_VERSION"/config/server.properties" >> /opt/kafka/start.sh &&\
+	echo "sed -i 's%#advertised.host.name=.*$%advertised.host.name='$""(hostname -i)'""%g'  /opt/kafka/kafka_2.11-"$KAFKA_VERSION"/config/server.properties" >> /opt/kafka/start.sh &&\
+	echo "[ ! -z $""ADVERTISED_HOST_NAME"" ] && sed -i 's%.*advertised.host.name=.*$%advertised.host.name='$""ADVERTISED_HOST_NAME'""%g'  /opt/kafka/kafka_2.11-"$KAFKA_VERSION"/config/server.properties" >> /opt/kafka/start.sh &&\
+	echo "sed -i 's%#host.name=.*$%host.name='$""(hostname -i)'""%g'  /opt/kafka/kafka_2.11-"$KAFKA_VERSION"/config/server.properties" >> /opt/kafka/start.sh &&\
+	echo "[ ! -z $""HOST_NAME"" ] && sed -i 's%.*host.name=.*$%host.name='$""HOST_NAME'""%g'  /opt/kafka/kafka_2.11-"$KAFKA_VERSION"/config/server.properties" >> /opt/kafka/start.sh &&\
+	echo "delete.topic.enable=true" >> /opt/kafka/kafka_2.11-$KAFKA_VERSION/config/server.properties &&\
+	echo "bin/kafka-server-start.sh config/server.properties" >> /opt/kafka/start.sh &&\
+	chmod a+x /opt/kafka/start.sh
+
+EXPOSE 9092
+
+WORKDIR /opt/kafka/kafka_2.11-$KAFKA_VERSION
+
+ENTRYPOINT ["sh", "/opt/kafka/start.sh"]
+
