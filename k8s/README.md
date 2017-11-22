@@ -1,0 +1,1 @@
+[k8s安装](https://github.com/akin520/AutoSetup/tree/master/ansible/k8s)
